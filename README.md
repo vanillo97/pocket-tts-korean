@@ -7,6 +7,16 @@ Text-to-speech that runs entirely on CPU—no Python, no GPU required.
 > This fork (`vanillo97/pocket-tts-korean`) adds a **Korean 300M variant**
 > (`seastar105/pocket-tts-korean-300m`), OpenVINO/ONNX Rust harnesses, and a full
 > Korean benchmark matrix. Upstream: `babybirdprd/pocket-tts`.
+>
+> Clone with submodules (benchmark/test assets live in a separate repo):
+> ```bash
+> git clone --recurse-submodules git@github.com:vanillo97/pocket-tts-korean.git
+> # already cloned without assets?
+> git submodule update --init --recursive
+> ```
+> Test assets (~5.7G, ONNX/IR models) are in
+> [`pocket-tts-korean-assets`](https://github.com/vanillo97/pocket-tts-korean-assets)
+> (Git LFS), mounted at `test-assets/`.
 
 ## Features
 
@@ -394,8 +404,7 @@ model guide in [`docs/models.md`](docs/models.md).
 
 Python reference (same conditions): torch CPU 8T INT8-dyn **0.78s (5.64x)** —
 fastest overall. NPU output is numerically broken (NaN); torch/ORT GPU not
-available (CPU-only builds). Test assets (~5.7G, ONNX/IR models) are tracked
-with Git LFS — see `.gitattributes` (branch `lfs-test-assets`).
+available (CPU-only builds).
 
 ## Manual Verification and TTFA Gate
 

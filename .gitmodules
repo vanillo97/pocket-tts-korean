@@ -1,0 +1,4 @@
+[submodule "test-assets"]
+	path = test-assets
+	url = git@github.com:vanillo97/pocket-tts-korean-assets.git
+	branch = main
