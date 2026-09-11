@@ -387,10 +387,10 @@ model guide in [`docs/models.md`](docs/models.md).
 
 | Model (Rust) | Best config | gen | Speed |
 |---|---|---|---|
-| `synth-rs` (OpenVINO IR) | CPU 8T, INT8/INT8-256 | 2.41s | 1.90x |
-| `live_bench` (candle FP32) | CPU 1T/8T (no thread scaling) | 3.9s | 1.13x |
-| `onnx-bench` (ORT hybrid) | CPU 8T, INT8-dyn | 4.96s | 0.90x |
-| `synth-rs` GPU.1 (dGPU) | mimi on CPU | 3.18s | 1.56x |
+| `live_bench` (candle + MKL) | CPU 8T, FP32 (`--features pocket-tts/mkl`) | 1.81s | 2.44x |
+| `synth-rs` (OpenVINO IR) | CPU 8T, INT8/INT8-256 | 2.42s | 1.90x |
+| `onnx-bench` (ORT hybrid) | CPU 8T, INT8-dyn | 5.03s | 0.89x |
+| `synth-rs` GPU.1 (dGPU) | mimi on CPU | 3.25s | 1.53x |
 
 Python reference (same conditions): torch CPU 8T INT8-dyn **0.78s (5.64x)** —
 fastest overall. NPU output is numerically broken (NaN); torch/ORT GPU not

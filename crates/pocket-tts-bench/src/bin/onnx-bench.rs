@@ -183,6 +183,14 @@ fn qa_wav(path: &std::path::Path, sample_rate: u32) -> Result<(f64, f64, f64)> {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    // Honor --threads on the candle side too (sampler/mimi run in candle,
+    // whose gemm backend reads RAYON_NUM_THREADS). Must precede any compute.
+    if let Some(t) = args.threads {
+        // SAFETY: set before any compute threads are spawned.
+        unsafe {
+            std::env::set_var("RAYON_NUM_THREADS", t.to_string());
+        }
+    }
     ort::init().commit();
     let outdir = std::path::PathBuf::from(&args.outdir);
     std::fs::create_dir_all(&outdir)?;

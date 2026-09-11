@@ -20,6 +20,11 @@ use pocket_tts::config::load_config;
 use pocket_tts::weights::download_if_necessary;
 use serde::Serialize;
 
+// hgemm_ link stub for `pocket-tts/mkl` builds (see ../mkl_hgemm_stub.rs).
+// Only needed when candle links static MKL; harmless otherwise.
+#[path = "../mkl_hgemm_stub.rs"]
+mod mkl_hgemm_stub;
+
 /// Rust port of run_live_benchmark.py §1 (candle e2e, CPU/FP32).
 #[derive(Parser, Debug)]
 #[command(name = "live_bench", about = "Live e2e TTS benchmark (candle)")]
@@ -48,7 +53,7 @@ struct Args {
     #[arg(long, default_value_t = 3)]
     runs: usize,
 
-    /// MKL/OMP thread count (sets MKL_NUM_THREADS/OMP_NUM_THREADS before load).
+    /// MKL/OMP thread count (sets RAYON/MKL/OMP_NUM_THREADS before load).
     #[arg(long)]
     threads: Option<usize>,
 }
@@ -158,7 +163,11 @@ fn main() -> Result<()> {
 
     if let Some(t) = args.threads {
         // SAFETY: set before any compute threads are spawned.
+        // RAYON_NUM_THREADS drives candle's gemm-crate matmuls (non-MKL
+        // builds); MKL/OMP vars drive MKL builds. Set all three so
+        // --threads is honored in every configuration.
         unsafe {
+            std::env::set_var("RAYON_NUM_THREADS", t.to_string());
             std::env::set_var("OMP_NUM_THREADS", t.to_string());
             std::env::set_var("MKL_NUM_THREADS", t.to_string());
         }
