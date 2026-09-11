@@ -1,8 +1,12 @@
-# Pocket TTS (Rust/Candle)
+# Pocket TTS (Rust/Candle) — Korean Fork
 
 A native Rust port of [Kyutai's Pocket TTS](https://github.com/kyutai-labs/pocket-tts) using [Candle](https://github.com/huggingface/candle) for tensor operations.
 
 Text-to-speech that runs entirely on CPU—no Python, no GPU required.
+
+> This fork (`vanillo97/pocket-tts-korean`) adds a **Korean 300M variant**
+> (`seastar105/pocket-tts-korean-300m`), OpenVINO/ONNX Rust harnesses, and a full
+> Korean benchmark matrix. Upstream: `babybirdprd/pocket-tts`.
 
 ## Features
 
@@ -18,6 +22,9 @@ Text-to-speech that runs entirely on CPU—no Python, no GPU required.
 - **Web UI** - Built-in web interface (React/Vite) for interactive use
 - **Flexible Builds** - Use `--no-default-features` for a "lite" build without web UI assets
 - **Python Bindings** - Use the Rust implementation from Python for improved performance
+- **Korean TTS** - Bundled `korean` variant (300M, HF public, no token needed)
+- **OpenVINO IR synthesis** - `synth-rs` binary for 7 deploy-package variants (FP32/INT8/INT4, CPU/GPU)
+- **Rust benchmark harnesses** - `live_bench` (candle e2e), `onnx-bench` (ORT hybrid); see `BENCHMARK_REPORT_RS.md`
 
 ## Quick Start
 
@@ -56,6 +63,21 @@ cargo run --release --package pocket-tts-cli -- generate \
 
 # Using a predefined voice
 cargo run --release --package pocket-tts-cli -- generate --voice alba
+```
+
+### Generate Korean audio
+
+```bash
+# Korean variant (public HF model, no token needed)
+cargo run --release -p pocket-tts-cli --no-default-features -- generate \
+    --variant korean --voice ./2_0000.wav \
+    --text "안녕하세요. 한국어 음성 합성 모델입니다." \
+    --output out.wav
+
+# Fastest Rust path: OpenVINO INT8 deploy package (see docs/models.md)
+./target/release/synth-rs --pkg test-assets/deploy_package_int8_int8_256 \
+    --threads 8 --text "안녕하세요. 한국어 음성 합성 모델입니다." \
+    --out out.wav --seed 0
 ```
 
 ### Start the HTTP server
@@ -295,6 +317,8 @@ candle/
 │       │   ├── server/         # Axum HTTP server
 │       │   └── voice.rs        # Voice resolution
 │       └── web/                # React/Vite Web UI source
+│   ├── pocket-tts-bench/ # Benchmark harnesses: live_bench (candle e2e), onnx-bench (ORT hybrid)
+│   └── pocket-tts-synth/ # synth-rs: OpenVINO IR synthesis binary
 └── docs/                   # Documentation
 ```
 
@@ -353,6 +377,25 @@ cargo bench -p pocket-tts
 ```
 
 > **Note**: Performance may differ from the Python implementation. Candle is optimized for portability rather than raw speed.
+
+### Korean benchmark (Rust, Intel Core Ultra 9 285)
+
+Full matrix (model × backend × quant × threads) measured with Rust harnesses —
+details in [`BENCHMARK_REPORT_RS.md`](BENCHMARK_REPORT_RS.md),
+run manual in [`docs/benchmark.md`](docs/benchmark.md),
+model guide in [`docs/models.md`](docs/models.md).
+
+| Model (Rust) | Best config | gen | Speed |
+|---|---|---|---|
+| `synth-rs` (OpenVINO IR) | CPU 8T, INT8/INT8-256 | 2.41s | 1.90x |
+| `live_bench` (candle FP32) | CPU 1T/8T (no thread scaling) | 3.9s | 1.13x |
+| `onnx-bench` (ORT hybrid) | CPU 8T, INT8-dyn | 4.96s | 0.90x |
+| `synth-rs` GPU.1 (dGPU) | mimi on CPU | 3.18s | 1.56x |
+
+Python reference (same conditions): torch CPU 8T INT8-dyn **0.78s (5.64x)** —
+fastest overall. NPU output is numerically broken (NaN); torch/ORT GPU not
+available (CPU-only builds). Test assets (~5.7G, ONNX/IR models) are tracked
+with Git LFS — see `.gitattributes` (branch `lfs-test-assets`).
 
 ## Manual Verification and TTFA Gate
 
