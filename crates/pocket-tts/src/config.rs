@@ -38,6 +38,11 @@ pub struct FlowLMConfig {
     pub lookup_table: LookupTableConfig,
     #[serde(default)]
     pub weights_path: Option<String>,
+    /// 24-layer teacher models (e.g. Korean) prepend a learned BOS frame
+    /// before the voice-conditioning sequence. Matches upstream
+    /// `flow_lm.insert_bos_before_voice`.
+    #[serde(default)]
+    pub insert_bos_before_voice: bool,
 }
 
 /// SEANet encoder/decoder configuration
@@ -94,6 +99,16 @@ pub struct MimiConfig {
     pub quantizer: QuantizerConfig,
     #[serde(default)]
     pub weights_path: Option<String>,
+    /// v2 (teacher) models project the encoder output to the latent dim in
+    /// the downsampler (`mimi.downsample`: `outer/seanet dim -> inner_dim`)
+    /// instead of keeping it at the encoder dimension. `None` preserves the
+    /// legacy 6-layer student layout. Matches upstream `mimi.inner_dim`.
+    #[serde(default)]
+    pub inner_dim: Option<usize>,
+    /// Input channels of the v2 upsampler (`mimi.upsample`). `None` preserves
+    /// the legacy layout. Matches upstream `mimi.outer_dim`.
+    #[serde(default)]
+    pub outer_dim: Option<usize>,
 }
 
 /// Root configuration
@@ -105,6 +120,11 @@ pub struct Config {
     pub weights_path: Option<String>,
     #[serde(default)]
     pub weights_path_without_voice_cloning: Option<String>,
+    /// Model-recommended sampling temperature (e.g. 0.3 for the Korean
+    /// teacher). Used when the caller does not override it. Matches upstream
+    /// `default_temperature`.
+    #[serde(default)]
+    pub default_temperature: Option<f32>,
 }
 
 /// Load configuration from a YAML file

@@ -302,6 +302,17 @@ impl LUTConditioner {
         Ok(self.embed.forward(tokens)?)
     }
 
+    /// Tokenize text to raw token ids without creating tensors.
+    /// Used by benchmark/export tooling (e.g. the OpenVINO deploy-package
+    /// port) that needs ids for external embedding lookup.
+    pub fn encode_ids(&self, text: &str) -> Result<Vec<u32>> {
+        let encoding = self
+            .tokenizer
+            .encode(text, true)
+            .map_err(|e| anyhow::anyhow!("Failed to encode text: {:?}", e))?;
+        Ok(encoding.get_ids().to_vec())
+    }
+
     /// Count tokens in a text string without creating tensors.
     /// Used for accurate text splitting to avoid oversized chunks.
     pub fn count_tokens(&self, text: &str) -> Result<usize> {

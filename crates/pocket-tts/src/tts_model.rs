@@ -35,6 +35,10 @@ pub struct TTSModel {
     /// End-of-sequence threshold
     pub eos_threshold: f32,
     pub noise_clamp: Option<f32>,
+    /// Optional fixed RNG seed for reproducible generation.
+    /// `None` (default) samples from OS entropy. Mirrors the
+    /// `torch.manual_seed(i)` protocol of run_live_benchmark.py.
+    pub seed: Option<u64>,
     /// Optional override for voice-conditioning Mimi chunk size (in frames).
     /// If `None`, an adaptive heuristic is used.
     pub voice_prompt_chunk_frames: Option<usize>,
@@ -92,9 +96,43 @@ impl TTSModel {
         device: &Device,
     ) -> Result<Self> {
         // Find config file - look relative to the Rust crate, then fall back to Python location
-        let config_path = find_config_path(variant)?;
+        let config_path = Self::config_path_for_variant(variant)?;
         let config = load_config(&config_path)?;
 
+        Self::load_from_config(
+            config,
+            Some(temp),
+            lsd_decode_steps,
+            eos_threshold,
+            noise_clamp,
+            device,
+        )
+    }
+
+    /// Resolve the bundled config file for a variant (e.g. `"b6369a24"`,
+    /// `"korean"`). Used for multilingual models shipped under
+    /// `crates/pocket-tts/config/`.
+    pub fn config_path_for_variant(variant: &str) -> Result<std::path::PathBuf> {
+        find_config_path(variant)
+    }
+
+    /// Load a model from an already-parsed [`Config`].
+    ///
+    /// This is the entry point for multilingual / custom models whose YAML
+    /// was downloaded from elsewhere (e.g. `hf://owner/repo/model.yaml`).
+    /// `temp = None` uses the config's `default_temperature` (e.g. 0.3 for
+    /// the Korean teacher), falling back to the global default.
+    pub fn load_from_config(
+        config: Config,
+        temp: Option<f32>,
+        lsd_decode_steps: usize,
+        eos_threshold: f32,
+        noise_clamp: Option<f32>,
+        device: &Device,
+    ) -> Result<Self> {
+        let temp = temp
+            .or(config.default_temperature)
+            .unwrap_or(defaults::TEMPERATURE);
         Self::from_config(
             config,
             temp,
@@ -318,7 +356,14 @@ impl TTSModel {
             vb.pp("flow_lm.transformer"),
         )?;
 
-        let mut flow_lm = FlowLMModel::new(flow_net, transformer, ldim, dim, vb.pp("flow_lm"))?;
+        let mut flow_lm = FlowLMModel::new(
+            flow_net,
+            transformer,
+            ldim,
+            dim,
+            config.flow_lm.insert_bos_before_voice,
+            vb.pp("flow_lm"),
+        )?;
         flow_lm.noise_clamp = noise_clamp;
 
         // Build Mimi components
@@ -400,13 +445,22 @@ impl TTSModel {
             config.mimi.channels,
             config.mimi.quantizer.dimension,
             config.mimi.quantizer.output_dimension,
+            config.mimi.inner_dim,
+            config.mimi.outer_dim,
             "mimi",
             vb.pp("mimi"),
         )?;
 
-        // Load speaker projection weight - uses mimi output dimension, not internal ldim
-        let mimi_out_dim = config.mimi.quantizer.output_dimension;
-        let speaker_proj_weight = vb.get((dim, mimi_out_dim), "flow_lm.speaker_proj_weight")?;
+        // Voice-conditioning projection. v2 (teacher) models project the
+        // downsampled latent (`inner_dim`, e.g. 32); legacy student models
+        // project the full encoder output (`quantizer.output_dimension`,
+        // e.g. 512). Matches upstream
+        // `(d_model, inner_dim or seanet.dimension)`.
+        let speaker_proj_in = config
+            .mimi
+            .inner_dim
+            .unwrap_or(config.mimi.quantizer.output_dimension);
+        let speaker_proj_weight = vb.get((dim, speaker_proj_in), "flow_lm.speaker_proj_weight")?;
 
         Ok(Self {
             flow_lm,
@@ -417,6 +471,7 @@ impl TTSModel {
             lsd_decode_steps,
             eos_threshold,
             noise_clamp,
+            seed: None,
             voice_prompt_chunk_frames: None,
             sample_rate: config.mimi.sample_rate,
             dim,
@@ -581,6 +636,20 @@ impl TTSModel {
         // Empty text tokens and backbone input
         let empty_text = Tensor::zeros((1, 0), DType::I64, &self.device)?;
         let text_embeddings = self.conditioner.forward(&empty_text)?;
+
+        // v2 (teacher) models insert a learned BOS frame before the voice
+        // conditioning. Matches upstream `get_state_for_audio_prompt`:
+        // `prompt = cat([bos_before_voice, prompt])`.
+        let conditioning_owned;
+        let conditioning = if self.flow_lm.insert_bos_before_voice {
+            let bos = self.flow_lm.bos_before_voice.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("insert_bos_before_voice is set but bos_before_voice is missing")
+            })?;
+            conditioning_owned = Tensor::cat(&[bos, conditioning], 1)?;
+            &conditioning_owned
+        } else {
+            conditioning
+        };
 
         // Concatenate text embeddings and audio conditioning
         // Match Python/reference order: audio conditioning comes before text embeddings.
@@ -1023,6 +1092,7 @@ impl TTSModel {
                         model.temp,
                         model.eos_threshold,
                         step,
+                        model.seed,
                     )
                 }) {
                 Ok(res) => res,

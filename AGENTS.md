@@ -20,8 +20,11 @@ The repository is organized as a Rust workspace at the root level:
 - `crates/pocket-tts`: Core library containing model implementations.
 - `crates/pocket-tts-cli`: CLI interface and Axum API / Static server.
 - `crates/pocket-tts-bindings`: Python bindings using PyO3.
+- `crates/pocket-tts-synth`: `synth-rs` binary — Rust port of deploy_package `synth.py` (OpenVINO).
+- `crates/pocket-tts-bench`: `live_bench` (candle e2e) and `onnx-bench` (ORT hybrid) binaries.
 - `assets/`: Centralized reference assets (.wav, .safetensors).
 - `python-reference/`: Original Python codebase for reference and parity testing.
+- `test-assets/`: Model/data files only (deploy_package_*, *.onnx, voice dumps). No code.
 
 ## Common Commands
 

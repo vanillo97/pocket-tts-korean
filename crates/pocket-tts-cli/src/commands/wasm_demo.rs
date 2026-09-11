@@ -37,6 +37,7 @@ pub async fn run(args: WasmDemoArgs) -> Result<()> {
         port: args.port,
         voice: "alba".to_string(),
         variant: "b6369a24".to_string(),
+        config: None,
         temperature: 0.7,
         lsd_decode_steps: 1,
         eos_threshold: -4.0,

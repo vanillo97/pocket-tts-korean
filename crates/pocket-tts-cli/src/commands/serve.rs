@@ -44,6 +44,11 @@ pub struct ServeArgs {
     #[arg(long, default_value = "b6369a24")]
     pub variant: String,
 
+    /// Custom model config: local path or `hf://` URL to a YAML file.
+    /// Overrides `--variant`.
+    #[arg(long)]
+    pub config: Option<String>,
+
     /// Sampling temperature
     #[arg(long, default_value = "0.7")]
     pub temperature: f32,

@@ -25,6 +25,8 @@ mkl = ["pocket-tts/mkl"]
 [dependencies]
 pocket-tts = { path = "../pocket-tts", version = "0.6.2" }
 candle-core.workspace = true
+hound.workspace = true
+realfft.workspace = true
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 axum = { workspace = true, features = ["multipart"] }

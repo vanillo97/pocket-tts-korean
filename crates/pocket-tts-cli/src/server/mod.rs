@@ -48,10 +48,15 @@ pub async fn start_server(args: ServeArgs) -> Result<()> {
         println!("  Set MKL_NUM_THREADS={mkl_threads}");
     }
 
-    // Load model with configured parameters
+    // Load model with configured parameters.
+    // An explicit --config (local path or hf:// URL) wins over --variant,
+    // enabling multilingual models such as the Korean 24-layer teacher.
     let model = if args.quantized {
         #[cfg(feature = "quantized")]
         {
+            if args.config.is_some() {
+                anyhow::bail!("--quantized requires --variant; custom --config is not supported with quantization");
+            }
             TTSModel::load_quantized_with_params(
                 &args.variant,
                 args.temperature,
@@ -63,6 +68,19 @@ pub async fn start_server(args: ServeArgs) -> Result<()> {
         {
             anyhow::bail!("Quantization feature not enabled. Rebuild with --features quantized");
         }
+    } else if let Some(cfg) = args.config.as_deref() {
+        use pocket_tts::config::load_config;
+        use pocket_tts::weights::download_if_necessary;
+        let path = download_if_necessary(cfg)?;
+        let config = load_config(&path)?;
+        TTSModel::load_from_config(
+            config,
+            Some(args.temperature),
+            args.lsd_decode_steps,
+            args.eos_threshold,
+            None,
+            &candle_core::Device::Cpu,
+        )?
     } else {
         TTSModel::load_with_params(
             &args.variant,

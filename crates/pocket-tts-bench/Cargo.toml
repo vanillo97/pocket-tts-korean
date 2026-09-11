@@ -1,0 +1,31 @@
+[package]
+name = "pocket-tts-bench"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Benchmarks: live candle e2e (live_bench) and ONNX hybrid (onnx-bench)"
+
+[dependencies]
+pocket-tts = { path = "../pocket-tts" }
+candle-core.workspace = true
+candle-nn.workspace = true
+ort.workspace = true
+ndarray = "0.17"
+anyhow.workspace = true
+clap.workspace = true
+hound.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
+realfft.workspace = true
+zip.workspace = true
+
+[[bin]]
+name = "live_bench"
+path = "src/bin/live_bench.rs"
+
+[[bin]]
+name = "onnx-bench"
+path = "src/bin/onnx-bench.rs"

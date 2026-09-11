@@ -2,11 +2,13 @@
 //!
 //! Provides `pocket-tts generate` for text-to-speech synthesis.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use pocket_tts::TTSModel;
+use pocket_tts::config::load_config;
+use pocket_tts::weights::download_if_necessary;
 use std::path::PathBuf;
 
 use crate::voice::{PREDEFINED_VOICES, resolve_voice};
@@ -33,13 +35,24 @@ pub struct GenerateArgs {
     #[arg(short, long, default_value = "output.wav")]
     pub output: PathBuf,
 
-    /// Model variant (default: b6369a24)
+    /// Model variant (default: b6369a24).
+    /// Bundled variants live in `crates/pocket-tts/config/` (e.g. `korean`).
+    /// Ignored when `--config` is given.
     #[arg(long, default_value = "b6369a24")]
     pub variant: String,
 
-    /// Sampling temperature (higher = more variation)
-    #[arg(long, default_value = "0.7")]
-    pub temperature: f32,
+    /// Custom model config: local path or `hf://` URL to a YAML file
+    /// (e.g. `hf://seastar105/pocket-tts-korean-300m/korean.yaml`).
+    /// Enables multilingual models not bundled with the binary.
+    /// Overrides `--variant`.
+    #[arg(long)]
+    pub config: Option<String>,
+
+    /// Sampling temperature (higher = more variation).
+    /// If omitted, the model's recommended `default_temperature` from its
+    /// config is used (e.g. 0.3 for the Korean teacher, 0.7 otherwise).
+    #[arg(long)]
+    pub temperature: Option<f32>,
 
     /// LSD decode steps (more steps = better quality, slower)
     #[arg(long, default_value = "1")]
@@ -114,12 +127,38 @@ pub fn run(args: GenerateArgs) -> Result<()> {
 
     let quantized = args.quantized;
 
+    // Resolve the model config: explicit --config (local path or hf:// URL)
+    // wins over the bundled --variant. This is what enables multilingual
+    // models such as the Korean 24-layer teacher.
+    let resolved_config = if let Some(cfg) = args.config.as_deref() {
+        let path = download_if_necessary(cfg)
+            .with_context(|| format!("Failed to fetch model config '{}'", cfg))?;
+        info!(quiet, "  {} Using config: {}", "▶".cyan(), cfg.yellow());
+        load_config(&path)?
+    } else {
+        info!(
+            quiet,
+            "  {} Using variant: {}",
+            "▶".cyan(),
+            args.variant.yellow()
+        );
+        let path = TTSModel::config_path_for_variant(&args.variant)?;
+        load_config(&path)?
+    };
+
     let model = if quantized {
         #[cfg(feature = "quantized")]
         {
+            if args.config.is_some() {
+                anyhow::bail!("--quantized requires --variant; custom --config is not supported with quantization");
+            }
+            let temp = args
+                .temperature
+                .or(resolved_config.default_temperature)
+                .unwrap_or(pocket_tts::config::defaults::TEMPERATURE);
             TTSModel::load_quantized_with_params_device(
                 &args.variant,
-                args.temperature,
+                temp,
                 args.lsd_decode_steps,
                 args.eos_threshold,
                 args.noise_clamp,
@@ -131,8 +170,8 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             anyhow::bail!("Quantization feature not enabled. Rebuild with --features quantized");
         }
     } else {
-        TTSModel::load_with_params_device(
-            &args.variant,
+        TTSModel::load_from_config(
+            resolved_config,
             args.temperature,
             args.lsd_decode_steps,
             args.eos_threshold,
